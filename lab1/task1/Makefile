@@ -16,7 +16,7 @@ else ifeq ($(INPUTFLAG),dynamic)
     LIBFLAG = -L. -lfunctions_dynamic
 	CFLAGS += -DLIBNAME="$(DYNAMIC_LIB_NAME)/"
 else
-    $(error Invalid INPUTFLAG value. Use 'static' or 'single'.)
+    $(error Invalid INPUTFLAG value. Use 'static', dynamic or 'single'.)
 endif
 
 $(TARGET): $(REQO)
