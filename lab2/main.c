@@ -1,31 +1,34 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#define __USE_MISC
 #include <dirent.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 #include <signal.h>
 
 #define BUF_SIZE 256
+#define MAX_PATH_LENGTH 4096
 
-void process_files(int pfd[2])
+void process_files(const char *dir_name, int pfd[2])
 {
     close(pfd[1]);
+    signal(SIGINT, SIG_IGN);
+
     char filename[BUF_SIZE];
-    int bytes_read;
+    char path[MAX_PATH_LENGTH];
+
+    ssize_t bytes_read;
 
     while ((bytes_read = read(pfd[0], filename, BUF_SIZE)))
     {
+        sprintf(path, "%s/%s", dir_name, filename);
         if (bytes_read == -1)
         {
             perror("Error: read");
             exit(EXIT_FAILURE);
         }
 
-        int fd = open(filename, O_RDONLY);
+        int fd = open(path, O_RDONLY);
 
         if (fd == -1)
         {
@@ -33,8 +36,8 @@ void process_files(int pfd[2])
             continue;
         }
         off_t file_size = lseek(fd, 0, SEEK_END);
+        printf("%s\t%ld bytes\n", filename, file_size);
         close(fd);
-        printf("%s -> %ld bytes\n",filename, file_size);
     }
     close(pfd[0]);
 
@@ -56,14 +59,16 @@ void process_dir(const char *dir_name, int pfd[2])
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL)
     {
-        if (entry->d_type == DT_DIR)
+        if (entry->d_type == DT_REG)
         {
-            continue;
+            write(pfd[1], entry->d_name , BUF_SIZE);
         }
-        write(pfd[1], entry->d_name, strlen(entry->d_name) + 1);
     }
     closedir(dir);
     close(pfd[1]);
+
+    wait(NULL);
+    exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char *argv[])
@@ -72,18 +77,15 @@ int main(int argc, char *argv[])
     pipe(pfd);
 
     pid_t pid = fork();
-
     signal(SIGINT, SIG_IGN); // ігноруємо сигнал переривання
 
     if (pid == 0) // Child process
     {
-        process_files(pfd);
+        process_files(argv[1], pfd);
     }
     else if (pid > 0) // Parent process
     {
         process_dir(argv[1], pfd);
-
-        wait(NULL);
     }
 
     return 0;
